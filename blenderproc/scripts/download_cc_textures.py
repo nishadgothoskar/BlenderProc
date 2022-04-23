@@ -23,7 +23,7 @@ def cli():
     if not os.path.exists(cc_texture_dir):
         os.makedirs(cc_texture_dir)
     else:
-        raise Exception("The folder already exists!")
+        print("dir already exists. continuing")
 
     # download the csv file, which contains all the download links
     csv_url = "https://cc0textures.com/api/v1/downloads_csv"
@@ -57,6 +57,11 @@ def cli():
         current_folder =  os.path.join(cc_texture_dir, asset)
         if not os.path.exists(current_folder):
             os.makedirs(current_folder)
+        path, dirs, files = next(os.walk(current_folder))
+        file_count = len(files)
+        if file_count > 0:
+            print("file count > 0. skipping.")
+            continue
         current_file_path = os.path.join(current_folder, "{}.zip".format(asset))
         response = requests.get(link, headers=headers)
         SetupUtility.extract_from_response(current_folder, response)
