@@ -13,39 +13,63 @@ d = np.load(args.scene_description_npz)
 K = d["K"]
 poses = d["object_poses"]
 cam_pose = d["camera_pose"]
-box_dims = d["box_dims"]
+object_model_paths = d["object_model_paths"]
+object_types = d["object_types"]
 im_width, im_height = d["image_dims"]
 floor_material = d["floor_material"]
 wall_material = d["wall_material"]
+agent_poses = d["agent_poses"]
 object_materials = d["object_materials"]
 (room_x_half_width, room_z_half_width) = d["room_half_widths"]
 floor_y = d["floor_y"]
+room_half_height = d["room_half_height"]
 
 num_objects = poses.shape[0]
 
 bproc.init()
-objects = [
-    bproc.object.create_primitive("CUBE", scale=[box_dims[i,0]/2,box_dims[i,1]/2,box_dims[i,2]/2])
-    for i in range(num_objects)
-]
+objects = []
 
 # set shading and physics properties and randomize PBR materials
-for j, obj in enumerate(objects):
+for i in range(num_objects):
+    obj = bproc.loader.load_obj(object_model_paths[object_types[i]])[0]
     obj.enable_rigidbody(True, friction = 100.0, linear_damping = 0.99, angular_damping = 0.99)
     obj.set_shading_mode('auto')
     obj.set_local2world_mat(
-        poses[j,:,:]
+        poses[i,:,:]
     )
-        
+    objects.append(obj)
+
+
+for i in range(agent_poses.shape[0]):
+    objs = bproc.loader.load_AMASS(
+        "/home/nishadg/mit/BlenderProc/resources/AMASS",
+        sub_dataset_id="CMU",
+        body_model_gender="male",
+        subject_id="7",
+        sequence_id=1,
+        frame_id=50
+    )
+    obj = objs[0]
+    print("\n\n\n LENGTH \n\n\n")
+    print(len(objs))
+    obj.set_local2world_mat(
+        agent_poses[i,:,:]
+    )
+    obj.set_scale([0.35, 0.35, 0.35])
+
+
 floor_plane = [
     bproc.object.create_primitive('PLANE',
     scale=[room_x_half_width*2, room_z_half_width*2, 1], location=[0, floor_y, 0], rotation=[np.pi/2, 0, 0]),
 ]
 wall_planes = [
-    bproc.object.create_primitive('PLANE', scale=[room_x_half_width*2, 2, 1], location=[0, 0, -room_z_half_width], rotation=[0, 0, 0]),
-    bproc.object.create_primitive('PLANE', scale=[2, room_z_half_width*2, 1], location=[room_x_half_width, 0, 0], rotation=[0, np.pi/2, 0]),
-    bproc.object.create_primitive('PLANE', scale=[room_x_half_width*2, 2, 1], location=[0, 0, room_z_half_width], rotation=[0, 0, 0]),
-    bproc.object.create_primitive('PLANE', scale=[2, room_z_half_width*2, 1], location=[-room_x_half_width, 0, 0], rotation=[0, np.pi/2, 0]),
+    # bproc.object.create_primitive('PLANE', scale=[room_x_half_width*4, room_half_height, 1], location=[0, 0, -room_z_half_width], rotation=[0, 0, 0]),
+    bproc.object.create_primitive('PLANE', scale=[room_z_half_width*2, room_half_height, 0.01], location=[room_x_half_width, 0, 0], rotation=[0, np.pi/2, 0]),
+    bproc.object.create_primitive('PLANE', scale=[room_x_half_width*2, room_half_height, 0.01], location=[0, 0, room_z_half_width], rotation=[0, 0, 0]),
+    bproc.object.create_primitive('PLANE', scale=[room_z_half_width*2, room_half_height, 0.01], location=[-room_x_half_width, 0, 0], rotation=[0, np.pi/2, 0]),
+    bproc.object.create_primitive('PLANE', scale=[room_x_half_width*2, room_half_height, 0.01], location=[0, 0, -room_z_half_width], rotation=[0, 0, 0]),
+
+    # bproc.object.create_primitive('PLANE', scale=[room_half_height, room_z_half_width*4, 1], location=[-room_x_half_width, 0, 0], rotation=[0, np.pi/2, 0]),
 ]
 for plane in (floor_plane + wall_planes):
     plane.enable_rigidbody(False, collision_shape='BOX', friction = 100.0, linear_damping = 0.99, angular_damping = 0.99)
@@ -54,21 +78,20 @@ for plane in (floor_plane + wall_planes):
 light_plane = bproc.object.create_primitive('PLANE', scale=[3, 3, 1], location=[0, -4, 0])
 light_plane.set_name('light_plane')
 light_plane_material = bproc.material.create('light_material')
-light_plane_material.make_emissive(emission_strength=10.0, 
+light_plane_material.make_emissive(emission_strength=5.0, 
                                    emission_color=np.random.uniform([0.5, 0.5, 0.5, 1.0], [1.0, 1.0, 1.0, 1.0]))    
 light_plane.replace_materials(light_plane_material)
 
 
 # sample point light on shell
 light_point = bproc.types.Light()
-light_point.set_energy(500)
+light_point.set_energy(200)
 light_point.set_color(np.random.uniform([0.5,0.5,0.5],[1,1,1]))
 light_point.set_location([0.0, -1.0, 0.0])
 
 
 # sample CC Texture and assign to room planes
 cc_textures = bproc.loader.load_ccmaterials(args.cc_textures_path)
-print([c.get_attr("name") for c in cc_textures])
 texture_name = floor_material
 tex = bproc.filter.one_by_attr(cc_textures, "name", texture_name)
 for plane in floor_plane:
